@@ -75,13 +75,16 @@ dataset = dynamic_dataset_prepare(data_path, pa_powers, dtype, device, slot_num=
 train_dataset, validate_dataset, test_dataset = dataset
 
 # Show sizes of batches in train dataset, size of validation and test dataset
-for i in range(len(dataset)):
+for i in range(1):
     for j, batch in enumerate(dataset[i]):
         # if j == 0:
         # Input batch size
         print(batch[0].size())
+        print(batch[0][0, 0, :3])
+        print(batch[0][0, 1, :3])
         # Target batch size
-        # print(batch[1].size())
+        print(batch[1].size())
+        print(batch[1][0, 0, :3])
     print(j + 1)
 # sys.exit()
 
