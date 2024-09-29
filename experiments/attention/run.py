@@ -21,7 +21,7 @@ curr_path = os.getcwd()
 save_path = os.path.join(curr_path, add_folder, exp_name)
 # os.mkdir(save_path)
 
-device = "cuda:5"
+device = "cuda:6"
 # device = "cpu"
 seed = 964
 torch.manual_seed(seed)
@@ -45,6 +45,8 @@ pa_powers = [0., 0.2, 0.4, 0.6, 0.8, 1.]
 # Define data type
 # dtype = torch.complex64
 dtype = torch.complex128
+# ptype = torch.float32
+ptype = torch.float64
 # A list of intermediate embedding sizes within each encoder
 interm_embed_size = [12]
 # A list of numbers of self-attention heads in each encoder
@@ -68,9 +70,9 @@ delay_d = 0
 # block_size == None is equal to block_size = signal length.
 # Block size is the same as chunk size 
 batch_size = 1
-chunk_num = 24
+chunk_num = 64
 # chunk_size = int(213504/chunk_num)
-chunk_size = int(36864/chunk_num)
+chunk_size = int(36864 * 6/chunk_num)
 # L2 regularization parameter
 alpha = 0.0
 # Configuration file
@@ -86,10 +88,6 @@ dataset = dynamic_dataset_prepare(data_path, pa_powers, dtype, device, slot_num=
 
 train_dataset, validate_dataset, test_dataset = dataset
 
-# Input embedding size (3 * N) depends on the number of input power channels N
-for j, batch in enumerate(train_dataset):
-    in_channels_num = batch[0].size()[1]
-    break
 # Show sizes of batches in train dataset, size of validation and test dataset
 # for i in range(len(dataset)):
 #     for j, batch in enumerate(dataset[i]):
@@ -97,7 +95,7 @@ for j, batch in enumerate(train_dataset):
 #         # Input batch size
 #         print(batch[0].size())
 #         # Target batch size
-#         # print(batch[1].size())
+#         print(batch[1].size())
 #     print(j + 1)
 # sys.exit()
 
@@ -107,8 +105,7 @@ def batch_to_tensors(a):
     return x, d
 
 def complex_mse_loss(d, y, model):
-    error = (d - y)[..., pad_zeros: -pad_zeros]
-    # error = (d - y)
+    error = (d - y)[..., pad_zeros if pad_zeros > 0 else None: -pad_zeros if pad_zeros > 0 else None]
     return error.abs().square().sum() #+ alpha * sum(torch.norm(p)**2 for p in model.parameters())
 
 def loss(model, signal_batch):
@@ -123,8 +120,8 @@ def loss(model, signal_batch):
 def quality_criterion(model, dataset):
     targ_pow, loss_val = 0, 0
     for batch in dataset:
-        _, d = batch_to_tensors(batch)
-        targ_pow += d[..., pad_zeros: -pad_zeros].abs().square().sum()
+        _, d= batch_to_tensors(batch)
+        targ_pow += d[..., pad_zeros if pad_zeros > 0 else None: -pad_zeros if pad_zeros > 0 else None].abs().square().sum()
         loss_val += loss(model, batch)
     return 10.0 * torch.log10((loss_val) / (targ_pow)).item()
 
@@ -142,14 +139,14 @@ def get_nested_attr(module, names):
     return module
 
 # EncoderBasedNL is a sequence of encoders.
-# Takes pure signal for each of N channels x_{0, n}, ..., x_{N-1, n} as an input and 
-# creates input features: Re(x_{0, n}), Im(x_{0, n}), |x_{0, n}|, ..., Re(x_{N-1, n}), Im(x_{N-1, n}), |x_{N-1, n}|. 
-# Thus there're 3N input channels. This number of channels corresponds to input embedding size.
+# Takes 2 signals as an input: x_{n}, p_{n}, - pure signal and normalized PA output power and 
+# creates input features: Re(x_{n}), Im(x_{n}), |x_{n}|, p_{n}.
+# Thus there're 4 input channels. This number of channels corresponds to input embedding size.
 # Each self-attention block is followed by linear layer, which transforms embedding into dimensionality, defined by out_embed_size list.
-# Output embedding size equals 2N, which correspond to Re(x_last_layer) and Im(x_last_layer) part of 
-# pre-distorted signal for each input channel. Output of Encoder is Re(x_last_layer) + 1j * Im(x_last_layer)
-model = EncoderBasedNL(in_channels_num=in_channels_num, interm_embed_size=interm_embed_size, num_heads=num_heads, p_drop=p_drop, 
-                        activate=activate, layer_norm_mode='common', features=['real', 'imag', 'abs'], bias=True, device=device, dtype=dtype)
+# Output embedding size equals 2, which correspond to Re(x_last_layer) and Im(x_last_layer) part of 
+# pre-distorted signal. Output of Encoder is Re(x_last_layer) + 1j * Im(x_last_layer).
+model = EncoderBasedNL(interm_embed_size=interm_embed_size, num_heads=num_heads, p_drop=p_drop, 
+                        activate=activate, layer_norm_mode='common', features=['real', 'imag', 'abs'], bias=True, device=device, dtype=ptype)
 
 model.to(device)
 

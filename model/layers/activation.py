@@ -8,6 +8,12 @@ class pass_act(nn.Module):
     def forward(self, x):
         return x
 
+class Tanh(nn.Module):
+    def __init__(self):
+        super(Tanh, self).__init__()
+    def forward(self, x):
+        return torch.tanh(x) 
+
 class CTanh(nn.Module):
     def __init__(self):
         super(CTanh, self).__init__()
@@ -51,6 +57,8 @@ class CPReLU(nn.Module):
         return torch.abs(x+self.bias)*torch.exp(1j*torch.angle(x))
 
 def configure_activates(activate_str: str, channel_num: int=8, dtype=torch.complex128, device='cuda'):
+    if activate_str == 'tanh':
+        activate_func = Tanh()
     if activate_str == 'ctanh':
         activate_func = CTanh()
     if activate_str == 'relu':

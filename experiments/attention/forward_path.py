@@ -104,7 +104,8 @@ def batch_to_tensors(a):
     return x, d, nf
 
 def complex_mse_loss(d, y, model):
-    return (d - y).abs().square().sum() + alpha * sum(torch.norm(p)**2 for p in model.parameters())
+    error = (d - y)[..., pad_zeros if pad_zeros > 0 else None: -pad_zeros if pad_zeros > 0 else None]
+    return error.abs().square().sum() #+ alpha * sum(torch.norm(p)**2 for p in model.parameters())
 
 def loss(model, signal_batch):
     x, y, _ = batch_to_tensors(signal_batch)
@@ -116,13 +117,12 @@ def loss(model, signal_batch):
 # def quality_criterion(loss_val):
 #     return loss_val
 def quality_criterion(model, dataset):
-    targ_pow, nf_pow, loss_val = 0, 0, 0
+    targ_pow, loss_val = 0, 0
     for batch in dataset:
-        _, d, nf = batch_to_tensors(batch)
-        nf_pow += nf.abs().square().sum()
-        targ_pow += d.abs().square().sum()
+        _, d= batch_to_tensors(batch)
+        targ_pow += d[..., pad_zeros if pad_zeros > 0 else None: -pad_zeros if pad_zeros > 0 else None].abs().square().sum()
         loss_val += loss(model, batch)
-    return 10.0 * torch.log10((loss_val - nf_pow) / (targ_pow - nf_pow)).item()
+    return 10.0 * torch.log10((loss_val) / (targ_pow)).item()
 
 def load_weights(path_name, device=device):
     return torch.load(path_name, map_location=torch.device(device))

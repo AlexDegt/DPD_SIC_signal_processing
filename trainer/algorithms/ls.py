@@ -113,8 +113,8 @@ def train_ls(model: nn.Module, train_dataset: DataLoaderType, validate_dataset: 
         hess_cond = torch.linalg.cond(hess).item()
 
         # Implement LS-step
-        hess_inv = torch.linalg.pinv(hess, rcond=1e-40, hermitian=True)
-        direction = -1. * hess_inv @ grad      
+        hess_inv = torch.linalg.pinv(hess, rcond=1e-15, hermitian=True)
+        direction = -1. * hess_inv @ grad
         x = SICOracle.get_flat_params(name_list=weight_names)
         SICOracle.set_flat_params(x + direction, name_list=weight_names)
 

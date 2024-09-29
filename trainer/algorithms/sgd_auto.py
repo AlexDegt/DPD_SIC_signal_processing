@@ -51,7 +51,7 @@ def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dat
     Returns:
         Learning curve (list), containing quality criterion calculated each epoch of learning.
     """
-    epochs = int(1e+5)
+    epochs = int(2e+4)
 
     if save_every is None:
         save_every = epochs - 1
@@ -79,7 +79,7 @@ def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dat
     
     lambda_lin = lambda epoch: 1#1 - (1 - 1e-1)*epoch/epochs
     # scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lambda_lin)
-    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-2, end_factor=1e-2, total_iters=epochs)
+    scheduler = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-2, end_factor=1e-5, total_iters=epochs)
 
     print_every = 1
     timer = Timer()
@@ -130,6 +130,7 @@ def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dat
                 # Track algorithm parameters
                 curr_params = torch.cat([p.view(-1) for p in model.parameters() if p.requires_grad == True], dim=0)
                 grad = torch.cat([p.grad.view(-1) for p in model.parameters() if p.requires_grad == True], dim=0)
+                grad_distr = [torch.norm(p.grad).item() for p in model.parameters() if p.requires_grad == True]
                 mu = scheduler.get_last_lr()[0]
                 grad_norm = torch.norm(grad).item()
                 grad_norm_curve.append(grad_norm)
@@ -161,6 +162,7 @@ def train_sgd_auto(model: nn.Module, train_dataset: DataLoaderType, validate_dat
                     np.save(save_path + f'lc_qcrit_test{exp_name}.npy', np.array(learning_curve_test_qcrit))
                     np.save(save_path + f'lc_qcrit_validate{exp_name}.npy', np.array(learning_curve_validate_qcrit))
                     np.save(save_path + f'grad_norm{exp_name}.npy', np.array(grad_norm_curve))
+                    np.save(save_path + f'grad_distr{exp_name}.npy', np.array(grad_distr))
                     np.save(save_path + f'param_norm{exp_name}.npy', np.array(weights_norm_curve))
                     np.save(save_path + f'lrs{exp_name}.npy', np.array(lrs))
         timer.__exit__()

@@ -84,7 +84,7 @@ def dynamic_dataset_prepare(data_path: ListOfStr, pa_powers: ListOfFloat, dtype:
     for path in data_path:
         mat = loadmat(path)
         input_tensor = torch.tensor(mat['TX'][0, :], dtype=dtype).view(1, 1, -1).to(device)
-        target_tensor = torch.tensor(mat['TX'][0, :] - mat['PAout'][0, :], dtype=dtype).view(1, 1, -1).to(device)
+        target_tensor = torch.tensor(mat['PAout'][0, :] - mat['TX'][0, :], dtype=dtype).view(1, 1, -1).to(device)
         input.append(input_tensor)
         target.append(target_tensor)
 
@@ -128,10 +128,14 @@ def dynamic_dataset_prepare(data_path: ListOfStr, pa_powers: ListOfFloat, dtype:
         block_size = input_train_size
     block_size_target = block_size
     
-    block_size_test = input_test_size * dynam_case_num
+    if block_size is None: 
+        block_size = input_test_size
+    block_size_test = block_size
     block_size_test_target = block_size_test
 
-    block_size_validat = input_validat_size * dynam_case_num
+    if block_size is None: 
+        block_size = input_validat_size
+    block_size_validat = block_size
     block_size_validat_target = block_size_validat
     
     dataset = list()
@@ -145,7 +149,6 @@ def dynamic_dataset_prepare(data_path: ListOfStr, pa_powers: ListOfFloat, dtype:
     train_target_set = train_target_set.unfold(2, block_size_target, int(block_size_target))[0, ...].permute(1, 0, 2)
     train_set = tuple((train_input_set, train_target_set))
     train_set = ResampleDataset(train_set, batch_size=batch_size)
-
     train_set = torch.utils.data.DataLoader(train_set, batch_size=None)
     
     validat_input_set = input[..., validat_slots_ind[0] * slot_input_size: validat_slots_ind[0] * slot_input_size + input_validat_size]

@@ -5,6 +5,7 @@ from typing import Union, List
 from .activation import configure_activates
 from collections import OrderedDict
 import numpy as np
+import sys
 
 ListOfStr = List[str]
 ListOfInt = List[int]
@@ -18,7 +19,7 @@ class Encoder(nn.Module):
     """
     def __init__(self, in_embed_size: int, out_embed_size: int, interm_embed_size: ListOfInt=[12], num_heads: ListOfInt=[1], 
                 p_drop: OptionalList=None, activate: ListOfStr=['sigmoid'], layer_norm_mode: str='nothing', bias: bool=True, 
-                device: OptionalStr=None, dtype: torch.dtype=torch.complex128):
+                device: OptionalStr=None, dtype: torch.dtype=torch.float64):
         """
         Constructor of the Encoder class. 
 
@@ -73,7 +74,7 @@ class Encoder(nn.Module):
             self.dp1.append(nn.Dropout(self.p_drop[layer_i]))
 
             if layer_norm_mode == 'common':
-                self.norm1.append(nn.LayerNorm(normalized_shape=(self.in_embed_size,)))
+                self.norm1.append(nn.LayerNorm(normalized_shape=(self.in_embed_size,), device=device, dtype=dtype))
             if layer_norm_mode == 'nothing':
                 self.norm1.append(Identity())
 
@@ -89,7 +90,7 @@ class Encoder(nn.Module):
             self.dp2.append(nn.Dropout(self.p_drop[layer_i]))
 
             if layer_norm_mode == 'common':
-                self.norm2.append(nn.LayerNorm(normalized_shape=(self.in_embed_size,)))
+                self.norm2.append(nn.LayerNorm(normalized_shape=(self.in_embed_size,), device=device, dtype=dtype))
             if layer_norm_mode == 'nothing':
                 self.norm2.append(Identity())
         self.lin_out = nn.Linear(in_features=self.in_embed_size, out_features=self.out_embed_size, 
@@ -102,28 +103,25 @@ class Encoder(nn.Module):
         x_curr = torch.clone(x_in)
         for layer_i in range(self.num_layers):
             # Self-attention takes dims (batch_size, seq_len, embed_size) with batch_first=True
-            x_curr = self.attention[layer_i](x_curr, x_curr, x_curr)
-            print(x_curr.size())
-            import sys
-            sys.exit()
+            x_curr, _ = self.attention[layer_i](x_curr, x_curr, x_curr)
             # Dropout input can have any shape, current: (batch_size, seq_len, embed_size)
-            x_curr = self.dp1(x_curr)
+            x_curr = self.dp1[layer_i](x_curr)
             # Add residual connection
             x_curr += x_in
             # LayerNorm deals with last embed_size dimensions, thus dims: (batch_size, seq_len, embed_size)
-            x_curr = self.norm1(x_curr)
+            x_curr = self.norm1[layer_i](x_curr)
             # Copy 1-st linear layer input to implement residual connection
             x_lin1_in = torch.clone(x_curr)
             # Output of LayerNorm and input of linear layer are the same: (batch_size, seq_len, embed_size)
-            x_curr = self.activation[layer_i](self.lin1(x_curr))
+            x_curr = self.activation[layer_i](self.lin1[layer_i](x_curr))
             # 2-nd linear layer (batch_size, seq_len, embed_size_interm)
-            x_curr = self.lin1(x_curr)
+            x_curr = self.lin2[layer_i](x_curr)
             # Dropout input can have any shape, current: (batch_size, seq_len, embed_size)
-            x_curr = self.dp2(x_curr)
+            x_curr = self.dp2[layer_i](x_curr)
             # Add residual connection
             x_curr += x_lin1_in
             # LayerNorm deals with last embed_size dimensions, thus dims: (batch_size, seq_len, embed_size)
-            x_curr = self.norm2(x_curr)
+            x_curr = self.norm2[layer_i](x_curr)
         # Output linear layer to transform embedding into desired dimensionality
         x_curr = self.lin_out(x_curr)
         # Output has dimensionality: (batch_size, output_embed_size, seq_len)
